@@ -1,0 +1,33 @@
+-----------Parameters-----------------
+          allow_self_collision: 0                                                           
+                 ccd_max_iters: 100                                                         
+                 ccd_slackness: 0.7                                                         
+       ccd_tet_inversion_thres: 0.0                                                         
+                 ccd_thickness: 1e-06                                                       
+             ee_classify_thres: 0.001                                                       
+            ee_mollifier_thres: 0.001                                                       
+             indentation_depth: 1.25                                                        
+                  key_friction: 1.0                                                         
+            key_lock_path_file: configs/key_and_lock/key_lock.txt                           
+         line_search_max_iters: 10                                                          
+                 lock_friction: 1.0                                                         
+                     sim_d_hat: 0.0001                                                      
+                     sim_eps_d: 0                                                           
+                     sim_eps_v: 0.001                                                       
+                     sim_kappa: 100.0                                                       
+              sim_kappa_affine: 100000.0                                                    
+                 sim_kappa_con: 10000000000.0                                               
+ sim_solver_cg_error_frequency: 10                                                          
+ sim_solver_cg_error_tolerance: 0                                                           
+       sim_solver_cg_max_iters: 50                                                          
+   sim_solver_newton_max_iters: 5                                                           
+                 sim_time_step: 0.2                                                         
+                 tac_density_l: 1000.0                                                      
+                 tac_density_r: 1000.0                                                      
+         tac_elastic_modulus_l: 300000.0                                                    
+         tac_elastic_modulus_r: 300000.0                                                    
+                  tac_friction: 125.0                                                       
+           tac_poisson_ratio_l: 0.3                                                         
+           tac_poisson_ratio_r: 0.3                                                         
+          tac_sensor_meta_file: gelsight_mini_e430/meta_file                                
+-----------------------End-----------------------

@@ -1,0 +1,1503 @@
+diff --git a/Track_1/configs/parameters/long_open_lock.yaml b/Track_1/configs/parameters/long_open_lock.yaml
+index dfe1bb2..52136d5 100644
+--- a/Track_1/configs/parameters/long_open_lock.yaml
++++ b/Track_1/configs/parameters/long_open_lock.yaml
+@@ -80,8 +80,10 @@ train:
+   checkpoint_every: 2000
+   eval_freq: 2000
+   n_eval: 50
+-  parallel: 2
++  parallel: 1 # 2
+   seed: 0
+   device: "cuda"
+   gpu: 0
+   name: "long_open_lock"
++  # WANDB名称
++  wandb_name: "wandb_long_open_lock"
+diff --git a/Track_1/configs/parameters/peg_insertion.yaml b/Track_1/configs/parameters/peg_insertion.yaml
+index 709042b..313bfaa 100644
+--- a/Track_1/configs/parameters/peg_insertion.yaml
++++ b/Track_1/configs/parameters/peg_insertion.yaml
+@@ -60,17 +60,16 @@ env:
+     peg_friction: [ 4.0, 15.0 ]
+     hole_friction: [ 0.0, 1.0 ]
+ 
+-
+ policy:
+   policy_name: TD3PolicyForPointFlowEnv
+-  buffer_size: 200000
++  buffer_size: 200000 #200000
+   train_freq: 2
+   gradient_steps: -1
+   learning_starts: 2000
+   target_policy_noise: 0.5
+   target_noise_clip: 1
+   action_noise: 0.5
+-  batch_size: 128
++  batch_size: 64 #128
+   learning_rate: 0.0003
+   policy_delay: 2
+ 
+@@ -92,7 +91,7 @@ train:
+   checkpoint_every: 2000
+   eval_freq: 2000
+   n_eval: 50
+-  parallel: 2
++  parallel: 1 # 2
+   seed: 0
+   device: "cuda"
+   gpu: 0
+diff --git a/Track_1/envs/common_params.py b/Track_1/envs/common_params.py
+index 6b625c5..ed0cbe8 100644
+--- a/Track_1/envs/common_params.py
++++ b/Track_1/envs/common_params.py
+@@ -1,3 +1,16 @@
++import os
++import sys
++script_path = os.path.dirname(os.path.realpath(__file__))
++track_path = os.path.abspath(os.path.join(script_path, ".."))
++utils_path = os.path.abspath(os.path.join(script_path, "../.."))
++# sys.path.append(script_path)
++# sys.path.append(track_path)
++sys.path.append(utils_path)
++
++# print(script_path)
++# print(track_path)
++print(utils_path)
++
+ from utils.common import Params
+ 
+ 
+@@ -5,7 +18,8 @@ class CommonParams(Params):
+     def __init__(
+             self,
+             # simulation parameters
+-            sim_time_step: float = 0.05,
++            # 仿真参数
++            sim_time_step: float = 0.05, # 时间步数
+             sim_d_hat: float = 2e-4,
+             sim_eps_d: float = 1e-4,
+             sim_eps_v: float = 1e-3,
+diff --git a/Track_1/envs/long_open_lock.py b/Track_1/envs/long_open_lock.py
+index 66599f0..c07f819 100644
+--- a/Track_1/envs/long_open_lock.py
++++ b/Track_1/envs/long_open_lock.py
+@@ -6,12 +6,17 @@ from matplotlib import pyplot as plt
+ from path import Path
+ from sapienipc.ipc_utils.user_utils import ipc_update_render_all
+ 
+-from Track_1.envs.common_params import CommonParams
+ 
+ script_path = os.path.dirname(os.path.realpath(__file__))
+-Track_1_path = os.path.join(script_path, "..")
++Track_path = os.path.abspath(os.path.join(script_path, "../../"))
++Track_1_path = os.path.abspath(os.path.join(script_path, "../"))
+ sys.path.append(script_path)
+ sys.path.append(Track_1_path)
++sys.path.append(Track_path)
++# print(script_path)
++# print(Track_1_path)
++
++from Track_1.envs.common_params import CommonParams
+ 
+ import time
+ from typing import Tuple
+@@ -35,9 +40,10 @@ from utils.sapienipc_utils import build_sapien_entity_ABD
+ wp.init()
+ wp_device = wp.get_preferred_device()
+ 
++# 开启GUI界面
+ GUI = False
+ 
+-
++# 环境参数
+ class LongOpenLockParams(CommonParams):
+     def __init__(
+         self,
+@@ -53,8 +59,9 @@ class LongOpenLockParams(CommonParams):
+         self.key_friction = key_friction
+         self.lock_friction = lock_friction
+ 
+-
++# 创建环境
+ class LongOpenLockSimEnv(gym.Env):
++    # 初始化
+     def __init__(
+         self,
+         max_action: np.ndarray,
+@@ -182,6 +189,7 @@ class LongOpenLockSimEnv(gym.Env):
+ 
+         # build scene, system
+ 
++    # 重启
+     def reset(self, offset=None, seed=None, key_idx: int = None):
+ 
+         if self.viewer:
+@@ -200,6 +208,7 @@ class LongOpenLockSimEnv(gym.Env):
+ 
+         return self.get_obs(info), {}
+ 
++    # 评估误差API
+     def evaluate_error(self, info, error_scale=500):
+         error_sum = 0
+         key1_pts_center = info["key1_pts"].mean(0)   # m
+@@ -265,11 +274,13 @@ class LongOpenLockSimEnv(gym.Env):
+         error_sum *= error_scale
+         return error_sum
+ 
++    # 随机种子API
+     def seed(self, seed=None):
+         if seed is None:
+             seed = (int(time.time() * 1000) % 10000 * os.getpid()) % 2**30
+         np.random.seed(seed)
+ 
++    # 重启时调用的初始化API
+     def initialize(self, key_offset=None, key_idx: int = None):
+ 
+         for e in self.scene.entities:
+@@ -483,6 +494,7 @@ class LongOpenLockSimEnv(gym.Env):
+             self._get_sensor_surface_vertices()
+         )
+ 
++    # 添加传感器API
+     def add_tactile_sensors(self, init_pos_l, init_rot_l, init_pos_r, init_rot_r):
+ 
+         self.tactile_sensor_1 = TactileSensorSapienIPC(
+@@ -513,6 +525,7 @@ class LongOpenLockSimEnv(gym.Env):
+             no_render=self.no_render,
+         )
+ 
++    # 进行一步API，获取观测值
+     def step(self, action):
+ 
+         self.current_episode_elapsed_steps += 1
+@@ -528,6 +541,7 @@ class LongOpenLockSimEnv(gym.Env):
+ 
+         return obs, reward, terminated, truncated, info
+ 
++    # 获取观测值API
+     def get_obs(self, info):
+         observation_left_surface_pts, observation_right_surface_pts = (
+             self._get_sensor_surface_vertices()
+@@ -546,6 +560,7 @@ class LongOpenLockSimEnv(gym.Env):
+         }
+ 
+         # extra observation for critics
++        # 给评价者的额外信息
+         extra_dict = {
+             "key1_pts": info["key1_pts"],
+             "key2_pts": info["key2_pts"],
+@@ -559,9 +574,11 @@ class LongOpenLockSimEnv(gym.Env):
+ 
+         return obs_dict
+ 
++    # 获取一些info状态API
+     def get_info(self):
+         info = {"steps": self.current_episode_elapsed_steps}
+ 
++        # 一些点位
+         key_pts = self.key_abd.get_positions().cpu().numpy().copy()
+         lock_pts = self.hold_abd.get_positions().cpu().numpy().copy()
+         if self.index == 0:
+@@ -593,6 +610,7 @@ class LongOpenLockSimEnv(gym.Env):
+             lock2_idx = np.array([6, 7, 8, 9])
+             lock_side_index = np.array([12, 13, 15, 17])
+ 
++        # 获取点位数据
+         key1_pts = key_pts[key1_idx]  # mm
+         key2_pts = key_pts[key2_idx]
+         key_side_pts = key_pts[key_side_index]
+@@ -662,12 +680,14 @@ class LongOpenLockSimEnv(gym.Env):
+             info["is_success"] = True
+         return info
+ 
++    # 获取奖励API
+     def get_reward(self, info):
+         self.error_evaluation_list.append(self.evaluate_error(info))
+         reward = -self.step_penalty
+         reward += self.error_evaluation_list[-2] - self.error_evaluation_list[-1]
+ 
+         # punish large force
++        # 大力惩罚？
+         surface_diff = info["surface_diff"].clip(0.2e-3, 1.5e-3) * 1000
+         reward -= np.sum(surface_diff)
+ 
+@@ -682,6 +702,7 @@ class LongOpenLockSimEnv(gym.Env):
+             )
+         return reward
+ 
++    # 获取截断API
+     def get_truncated(self, info):
+         return (
+             info["steps"] >= self.max_steps
+@@ -689,20 +710,24 @@ class LongOpenLockSimEnv(gym.Env):
+             or info["error_too_large"]
+         )
+ 
++    # 获取终止API
+     def get_terminated(self, info):
+         return info["is_success"]
+ 
++    # 获取传感器表面关键点
+     def _get_sensor_surface_vertices(self):
+         return [
+             self.tactile_sensor_1.get_surface_vertices_world(),
+             self.tactile_sensor_2.get_surface_vertices_world(),
+         ]
+ 
++    # 进行一步
+     def _sim_step(self, action):
+         """
+         Execute simulation step with 2D action (x,z)
+         Args:
+             action: 2D numpy array [x,z]
++            动作是一个2维的数组
+         """
+         substeps = max(
+             1, round(np.max(np.abs(action)) / 2e-3 / self.params.sim_time_step)
+@@ -710,6 +735,7 @@ class LongOpenLockSimEnv(gym.Env):
+         v = action / substeps / self.params.sim_time_step
+         
+         # Convert 2D action [x,z] directly to 3D velocity [-x,0,-z]
++        # 二维化为三维
+         v_3d = np.array([-v[0], 0, -v[1]])
+         
+         for _ in range(substeps):
+@@ -732,6 +758,7 @@ class LongOpenLockSimEnv(gym.Env):
+                 ipc_update_render_all(self.scene)
+                 self.viewer.render()
+ 
++    # 关闭仿真系统
+     def close(self):
+         self.ipc_system = None
+         pass
+@@ -751,11 +778,17 @@ class LongOpenLockRandPointFlowEnv(LongOpenLockSimEnv):
+     ):
+         """
+         param: marker_interval_range, in mm.
++        # 标记点间隔，以mm为单位
+         param: marker_rotation_range: overall marker rotation, in radian.
++        # 标记点旋转，以弧度为单位
+         param: marker_translation_range: overall marker translation, in mm. first two elements: x-axis; last two elements: y-xis.
++        # 总体标记平移，以毫米为单位。前两个元素：x 轴;最后两个元素：y-xis。
+         param: marker_pos_shift: independent marker position shift, in mm, in x- and y-axis. caused by fabrication errors.
++        # 独立的标记位置偏移，以毫米为单位，在 x 轴和 y 轴上，由制造错误引起
+         param: marker_random_noise: std of Gaussian marker noise, in pixel. caused by CMOS noise and image processing.
++        # 高斯标记噪声的标准，以像素为单位。由 CMOS 噪声和图像处理引起。
+         param: loss_tracking_probability: the probability of losing tracking, appled to each marker
++        # 应用于每个标记的丢失跟踪的概率
+         """
+         self.sensor_meta_file = kwargs.get("params").tac_sensor_meta_file
+         self.marker_interval_range = marker_interval_range
+@@ -861,6 +894,7 @@ class LongOpenLockRandPointFlowEnv(LongOpenLockSimEnv):
+ 
+ if __name__ == "__main__":
+ 
++    # 可视化光流
+     def visualize_marker_point_flow(o, i, name, save_dir="marker_flow_images_4"):
+ 
+         if not os.path.exists(save_dir):
+@@ -887,9 +921,10 @@ if __name__ == "__main__":
+         plt.savefig(filename)
+         plt.close()
+ 
+-    GUI = False
++    GUI = True
+     timestep = 0.05
+ 
++    # 参数
+     params = LongOpenLockParams(
+         sim_time_step=timestep,
+         tac_sensor_meta_file="gelsight_mini_e430/meta_file",
+@@ -900,6 +935,7 @@ if __name__ == "__main__":
+     )
+     print(params)
+ 
++    # 创建环境
+     env = LongOpenLockRandPointFlowEnv(
+         params=params,
+         step_penalty=1,
+@@ -919,6 +955,7 @@ if __name__ == "__main__":
+         normalize=False,
+     )
+ 
++    # 设置输出精度，小数点后四位
+     np.set_printoptions(precision=4)
+ 
+     offset = [0, 0, 0]
+@@ -930,13 +967,14 @@ if __name__ == "__main__":
+ 
+     for i in range(31):
+         obs, rew, done, _, info = env.step(np.array([0.0, 0.5]))
+-        visualize_marker_point_flow(obs, i, "test")
++        # visualize_marker_point_flow(obs, i, "test")
++        print(obs["marker_flow"].shape)
+         print(
+             f"step: {env.current_episode_elapsed_steps:2d} rew: {rew:.2f} done: {done} success: {info['is_success']} re: {info['relative_motion']}"
+         )
+-    for i in range(10):
+-        obs, rew, done, _, info = env.step(np.array([0.0, -0.5]))
+-        visualize_marker_point_flow(obs, i + 24, "test")
+-        print(
+-            f"step: {env.current_episode_elapsed_steps:2d} rew: {rew:.2f} done: {done} success: {info['is_success']}"
+-        )
++    # for i in range(10):
++    #     obs, rew, done, _, info = env.step(np.array([0.0, -0.5]))
++    #     # visualize_marker_point_flow(obs, i + 24, "test")
++    #     print(
++    #         f"step: {env.current_episode_elapsed_steps:2d} rew: {rew:.2f} done: {done} success: {info['is_success']}"
++    #     )
+\ No newline at end of file
+diff --git a/Track_1/envs/peg_insertion.py b/Track_1/envs/peg_insertion.py
+index 409d793..7a34900 100644
+--- a/Track_1/envs/peg_insertion.py
++++ b/Track_1/envs/peg_insertion.py
+@@ -10,6 +10,10 @@ script_path = os.path.dirname(os.path.realpath(__file__))
+ track_path = os.path.abspath(os.path.join(script_path, ".."))
+ sys.path.append(script_path)
+ sys.path.append(track_path)
++
++# print(script_path)
++# print(track_path)
++
+ import time
+ from typing import Tuple, Union
+ 
+@@ -30,6 +34,7 @@ from envs.tactile_sensor_sapienipc import (
+     TactileSensorSapienIPC,
+     VisionTactileSensorSapienIPC,
+ )
++import utils
+ from utils.common import randomize_params, suppress_stdout_stderr
+ from utils.geometry import quat_product
+ from utils.gym_env_utils import convert_observation_to_space
+@@ -44,7 +49,7 @@ gui = False
+ def evaluate_error(offset):
+     return np.linalg.norm(offset)
+ 
+-
++# 参数
+ class ContinuousInsertionParams(CommonParams):
+     def __init__(
+         self,
+@@ -62,8 +67,9 @@ class ContinuousInsertionParams(CommonParams):
+         self.peg_friction = peg_friction
+         self.hole_friction = hole_friction
+ 
+-
++# 插入环境(孔+钉子+传感器胶体)
+ class ContinuousInsertionSimEnv(gym.Env):
++    # 参数与环境初始化
+     def __init__(
+         self,
+         step_penalty: float,
+@@ -84,25 +90,44 @@ class ContinuousInsertionSimEnv(gym.Env):
+     ):
+         """
+         Initialize the ContinuousInsertionSimEnv.
+-
++            初始化
+         :param step_penalty: Penalty for each step taken in the environment.
++            在环境中采取的每一步的惩罚
+         :param final_reward: Reward given when the task is successfully completed.
++            成功完成任务后给予的奖励
+         assert max_action.shape == (3,), f"max_action should have shape (3,), but got shape {max_action.shape}"
++            ?
+         :param max_steps: Maximum number of steps allowed in an episode.
++            一轮允许的最大步数
+         :param z_step_size: Step size in the z-direction.
++            z方向上的步长
+         :param peg_hole_path_file: Path to the file containing peg and hole paths.
++            包含钉和孔路径的文件的路径，一环扣一环，绝对->目录->上层级->txt->一堆STL的路径
++
+         :param peg_x_max_offset: Maximum offset in the x-direction for the peg.
++            钉子在 x 方向上的最大偏移量
+         :param peg_y_max_offset: Maximum offset in the y-direction for the peg.
++            钉子在 y 方向上的最大偏移量
+         :param peg_theta_max_offset: Maximum offset in the theta direction for the peg.
++            钉子在 z 轴旋转方向上的最大偏移量
++        
+         :param obs_check_threshold: Threshold for checking observations.
++            检查观测结果的阈值
+         :param params: Lower bound parameters for the environment.
++            环境下限参数
+         :param params_upper_bound: Upper bound parameters for the environment.
++            环境上限参数
+         :param device: Device to be used for simulation, default is "cuda:0".
++            设备
+         :param no_render: Flag to disable rendering.
++            渲染开关
+         :param kwargs: Additional keyword arguments.
++            附加关键字参数
+         """
++        # 子类把父类的__init__()放到自己的__init__()当中，这样子类就有了父类的__init__()的那些东西
+         super(ContinuousInsertionSimEnv, self).__init__()
+ 
++        # 参数传递
+         self.no_render = no_render
+         self.step_penalty = step_penalty
+         self.final_reward = final_reward
+@@ -121,6 +146,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+         self.peg_theta_max_offset = peg_theta_max_offset
+         self.obs_check_threshold = obs_check_threshold
+ 
++        # 参数传递
+         if params is None:
+             self.params_lb = ContinuousInsertionParams()
+         else:
+@@ -135,6 +161,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+             self.params_lb, self.params_ub
+         )  # type: ContinuousInsertionParams
+ 
++        # 自定义参数
+         self.current_episode_elapsed_steps = 0
+         self.current_episode_over = False
+         self.sensor_grasp_center_init = None
+@@ -143,24 +170,33 @@ class ContinuousInsertionSimEnv(gym.Env):
+         # self.too_many_steps = False
+ 
+         # build scene, system
++        # 搭建场景、系统，自定义变量，后面接受spaien的场景
+         self.viewer = None
+ 
+         if not no_render:
++            # 创建场景
+             self.scene = sapien.Scene()
++            # 环境光
+             self.scene.set_ambient_light([1.0, 1.0, 1.0])
++            # 添加定向光
+             self.scene.add_directional_light([0, -1, -1], [1.0, 1.0, 1.0], True)
+         else:
+             self.scene = sapien.Scene()
+ 
+         # add a camera to indicate shader
++        # 添加相机来指示着色器
+         if not no_render:
++            # 创建实体
+             cam_entity = sapien.Entity()
+             cam = sapien.render.RenderCameraComponent(512, 512)
++            # 添加组件
+             cam_entity.add_component(cam)
+             cam_entity.name = "camera"
++            # 添加到场景中
+             self.scene.add_entity(cam_entity)
+ 
+         ######## Create system ########
++        # 创建“增量势接触系统”
+         ipc_system_config = IPCSystemConfig()
+         # memory config
+         ipc_system_config.max_scenes = 1
+@@ -184,6 +220,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+         ipc_system_config.allow_self_collision = bool(self.params.allow_self_collision)
+ 
+         # solver config
++        # 求解器
+         ipc_system_config.newton_max_iters = int(
+             self.params.sim_solver_newton_max_iters
+         )  # key param
+@@ -200,22 +237,28 @@ class ContinuousInsertionSimEnv(gym.Env):
+         device = wp.get_device(device)
+         ipc_system_config.device = wp.get_device(device)
+ 
++        # 将IPC系统加入场景
+         self.ipc_system = IPCSystem(ipc_system_config)
+         self.scene.add_system(self.ipc_system)
+ 
++        # 判断max_action.shape是否满足条件，否则直接退出程序
+         assert max_action.shape == (3,)
+         self.max_action = max_action
+         self.action_space = spaces.Box(
+             low=-1, high=1, shape=max_action.shape, dtype=np.float32
+         )
++        # 获取默认的观测量
+         self.default_observation = self.__get_sensor_default_observation__()
++        # 将观察结果转化到空间
+         self.observation_space = convert_observation_to_space(self.default_observation)
+ 
++    # 随机种子API
+     def seed(self, seed=None):
+         if seed is None:
+             seed = (int(time.time() * 1000) % 10000 * os.getpid()) % 2**30
+         np.random.seed(seed)
+ 
++    # 获取默认的观测量API
+     def __get_sensor_default_observation__(self):
+ 
+         meta_file = self.params.tac_sensor_meta_file
+@@ -228,12 +271,13 @@ class ContinuousInsertionSimEnv(gym.Env):
+         initial_surface_pts = np.zeros((np.sum(on_surface_np), 3)).astype(float)
+ 
+         obs = {
+-            "relative_motion": np.zeros((4,), dtype=np.float32),
+-            "gt_offset": np.zeros((3,), dtype=np.float32),
+-            "surface_pts": np.stack([np.stack([initial_surface_pts] * 2)] * 2),
++            "relative_motion": np.zeros((4,), dtype=np.float32), # 相对运动
++            "gt_offset": np.zeros((3,), dtype=np.float32), # 偏移量
++            "surface_pts": np.stack([np.stack([initial_surface_pts] * 2)] * 2), # 表面关键点
+         }
+         return obs
+-
++    
++    # 将环境重置为初始内部状态，返回初始观察和信息API
+     def reset(self, offset=None, seed=None, peg_idx: int = None):
+ 
+         if self.viewer:
+@@ -247,6 +291,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+         if offset:
+             offset = np.array(offset).astype(float)
+ 
++        # 重新初始化
+         offset = self._initialize(offset, peg_idx)
+ 
+         self.init_offset_of_current_episode = offset
+@@ -259,9 +304,12 @@ class ContinuousInsertionSimEnv(gym.Env):
+         self.current_episode_initial_right_surface_pts = self.no_contact_surface_mesh[1]
+         self.current_episode_over = False
+ 
++        # 返回观测状态
+         return self.get_obs(), {}
+ 
++    # reset时调用的初始化API
+     def _initialize(
++
+         self, offset: Union[np.ndarray, None], peg_idx: Union[int, None] = None
+     ):
+         """
+@@ -274,6 +322,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+         self.ipc_system.rebuild()
+ 
+         # If in the process of evaluation, select sequentially; if in the process of training, select randomly.
++        # 如果在评估过程中，则顺序选择；如果在训练过程中，则随机选择，随机选择偏移量？
+         if peg_idx is None:
+             peg_path, hole_path = self.peg_hole_path_list[
+                 np.random.randint(len(self.peg_hole_path_list))
+@@ -283,12 +332,14 @@ class ContinuousInsertionSimEnv(gym.Env):
+             peg_path, hole_path = self.peg_hole_path_list[peg_idx]
+ 
+         # get peg and hole path
++        # 获取孔和钉子配置文件的路径
+         asset_dir = Path(track_path) / "assets"
+         peg_path = asset_dir / peg_path
+         hole_path = asset_dir / hole_path
+         print("Peg name:", peg_path)
+ 
+         # add hole to the sapien scene
++        # 构建孔实体，把孔添加到场景中，后面赋予碰撞属性
+         with suppress_stdout_stderr():
+             self.hole_entity, hole_abd = build_sapien_entity_ABD(
+                 hole_path,
+@@ -300,7 +351,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+         self.hole_ext = os.path.splitext(hole_path)[-1]
+         self.hole_entity.set_name("hole")
+         self.hole_abd = hole_abd
+-        self.scene.add_entity(self.hole_entity)
++        self.scene.add_entity(self.hole_entity) # 把孔添加到场景中
+         if self.hole_ext == ".msh":
+             self.hole_upper_z = hole_height = np.max(
+                 hole_abd.tet_mesh.vertices[:, 2]
+@@ -311,6 +362,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+             ) - np.min(hole_abd.tri_mesh.vertices[:, 2])
+ 
+         # add peg model
++        # 构建钉子实体，后面赋予碰撞属性
+         with suppress_stdout_stderr():
+             self.peg_entity, peg_abd = build_sapien_entity_ABD(
+                 peg_path,
+@@ -346,6 +398,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+             )[0]
+ 
+         # generate random and valid offset
++        # 生成随机且有效的偏移量，fcl是一个碰撞检测的库
+         if offset is None:
+             peg = fcl.BVHModel()
+             if self.peg_ext == ".msh":
+@@ -386,11 +439,12 @@ class ContinuousInsertionSimEnv(gym.Env):
+             hole.endModel()
+ 
+             t1 = fcl.Transform()
+-            peg_fcl = fcl.CollisionObject(peg, t1)
++            peg_fcl = fcl.CollisionObject(peg, t1) # 生成碰撞对象
+             t2 = fcl.Transform()
+-            hole_fcl = fcl.CollisionObject(hole, t2)
++            hole_fcl = fcl.CollisionObject(hole, t2) # 生成碰撞对象
+ 
+             while True:
++                # 生成三个偏移
+                 x_offset = (np.random.rand() * 2 - 1) * self.peg_x_max_offset / 1000
+                 y_offset = (np.random.rand() * 2 - 1) * self.peg_y_max_offset / 1000
+                 theta_offset = (
+@@ -413,6 +467,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+                     )
+                     break
+         else:
++            # 直接用给定的偏移量即可
+             x_offset, y_offset, theta_offset = (
+                 offset[0] / 1000,
+                 offset[1] / 1000,
+@@ -420,6 +475,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+             )
+ 
+         # add peg to the scene
++        # 把钉子添加到场景中
+         init_pos = (
+             x_offset,
+             y_offset,
+@@ -431,6 +487,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+         self.scene.add_entity(self.peg_entity)
+ 
+         # add tactile sensors to the sapien scene
++        # 把传感器添加到场景中，没错是在后面的API里面调用的add_entity()，这代码写的不了然，跳来跳去
+         gripper_x_offset = self.params.gripper_x_offset / 1000  # mm to m
+         gripper_z_offset = self.params.gripper_z_offset / 1000
+         sensor_grasp_center = np.array( 
+@@ -460,6 +517,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+             self._add_tactile_sensors(init_pos_l, init_rot_l, init_pos_r, init_rot_r)
+ 
+         # get init sensor center
++        # 获取传感器的中心
+         sensor_grasp_center = tuple((x + y) / 2 for x, y in zip(init_pos_l, init_pos_r))
+         self.sensor_grasp_center_init = (
+             np.array(sensor_grasp_center + (init_theta_offset,)) * 1000
+@@ -467,6 +525,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+         self.sensor_grasp_center_current = self.sensor_grasp_center_init.copy()
+ 
+         # gui initialization
++        # 初始化gui界面
+         if gui:
+             self.viewer = viewer()
+             self.viewer.set_scene(self.scene)
+@@ -486,6 +545,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+                 self.viewer.render()
+ 
+         # grasp the peg
++        # 驱动传感器抓住钉子
+         grasp_step = max(
+             round(
+                 (0.1 + self.params.indentation_depth)
+@@ -537,7 +597,9 @@ class ContinuousInsertionSimEnv(gym.Env):
+         )
+ 
+         # Move the peg to create contact between the peg and the hole
++        # 驱动传感器，移动钉子
+         z_distance = 0.1e-3 + self.z_step_size * 1e-3
++        # z_distance = 0.0
+         pre_insertion_step = max(
+             round((z_distance / 1e-3) / self.params.sim_time_step), 1
+         )
+@@ -562,6 +624,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+ 
+         return offset
+ 
++    # 添加传感器API
+     def _add_tactile_sensors(self, init_pos_l, init_rot_l, init_pos_r, init_rot_r):
+ 
+         self.tactile_sensor_1 = TactileSensorSapienIPC(
+@@ -592,6 +655,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+             no_render=self.no_render,
+         )
+ 
++    # 进行一步仿真，获取上帝视角信息，并获取观测值，奖励值，...
+     def step(self, action):
+         """
+         :param action: numpy array; action[0]: delta_x, mm; action[1]: delta_y, mm; action[2]: delta_theta, radian.
+@@ -599,8 +663,10 @@ class ContinuousInsertionSimEnv(gym.Env):
+         """
+         self.current_episode_elapsed_steps += 1
+         action = np.array(action).flatten() * self.max_action
++        # 执行仿真一步
+         self._sim_step(action)
+ 
++        # 获取状态信息
+         info = self.get_info()
+         obs = self.get_obs(info=info)
+         reward = self.get_reward(info=info, obs=obs)
+@@ -608,6 +674,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+         truncated = self.get_truncated(info=info, obs=obs)
+         return obs, reward, terminated, truncated, info
+ 
++    # 进行一步仿真
+     def _sim_step(self, action):
+         action = np.clip(action, -self.max_action, self.max_action)
+         current_theta = self.current_offset_of_current_episode[2] * np.pi / 180
+@@ -642,21 +709,26 @@ class ContinuousInsertionSimEnv(gym.Env):
+         ):
+ 
+             self.error_too_large = (
++                # 如果误差很大（偏移量过大），则无需进行模拟
+                 True  # if error is loo large, then no need to do simulation
+             )
+         elif self.current_episode_elapsed_steps > self.max_steps:
++            # 这种情况（步数太多）不太可能发生，因为环境应该在达到这一点之前终止
+             self.too_many_steps = True  # This condition is unlikely because the environment should terminate before reaching this point
+         else:
++            # 正常情况
+             x = action_sim[0] / 1000
+             y = action_sim[1] / 1000
+             theta = action_sim[2] * np.pi / 180
+ 
++            # 计算步数
+             action_substeps = max(
+                 1, round((max(abs(x), abs(y)) / 5e-3) / self.params.sim_time_step)
+             )
+             action_substeps = max(
+                 action_substeps, round((abs(theta) / 0.2) / self.params.sim_time_step)
+             )
++            # 计算速度
+             v_x = x / self.params.sim_time_step / action_substeps
+             v_y = y / self.params.sim_time_step / action_substeps
+             v_theta = theta / self.params.sim_time_step / action_substeps
+@@ -691,8 +763,9 @@ class ContinuousInsertionSimEnv(gym.Env):
+                     self.scene.update_render()
+                     ipc_update_render_all(self.scene)
+                     self.viewer.render()
++        # 每步action之后都会在z的方向上向下走一个小位移
+         z = -self.z_step_size / 1000
+-        z_substeps = max(1, round(abs(z) / 5e-3 / self.params.sim_time_step))
++        z_substeps = max(1, round(abs(z) / 5e-3 / self.params.sim_time_step)) # round四舍五入
+         v_z = z / self.params.sim_time_step / z_substeps
+         for _ in range(z_substeps):
+             self.tactile_sensor_1.set_active_v(
+@@ -715,6 +788,7 @@ class ContinuousInsertionSimEnv(gym.Env):
+                 ipc_update_render_all(self.scene)
+                 self.viewer.render()
+ 
++    # 获取上帝视角信息
+     def get_info(self):
+         info = {"steps": self.current_episode_elapsed_steps}
+ 
+@@ -768,10 +842,13 @@ class ContinuousInsertionSimEnv(gym.Env):
+ 
+         return info
+ 
++    # 观测状态
+     def get_obs(self, info=None):
++        # 计算传感器抓握中心偏移量
+         sensor_offset = self.sensor_grasp_center_current - self.sensor_grasp_center_init
+ 
+         if info:
++            # 若info出错，则返回当前轮次的初始观测值，未接触时的点位
+             if info["error_too_large"] or info["too_many_steps"]:
+                 obs_dict = {
+                     "surface_pts": np.stack(
+@@ -789,7 +866,8 @@ class ContinuousInsertionSimEnv(gym.Env):
+ 
+                 }
+                 return obs_dict
+-
++        
++        # 观测传感器表面关键点的位置
+         observation_left_surface_pts, observation_right_surface_pts = (
+             self._get_sensor_surface_vertices()
+         )
+@@ -814,9 +892,11 @@ class ContinuousInsertionSimEnv(gym.Env):
+             "gt_offset": np.array(self.current_offset_of_current_episode, dtype=np.float32),
+             "relative_motion": np.array(sensor_offset, dtype=np.float32)
+         }
++        print(obs_dict["surface_pts"].shape)
+ 
+         return obs_dict
+ 
++    # 获取奖励值（奖励函数）
+     def get_reward(self, info, obs=None):
+         self.error_evaluation_list.append(
+             evaluate_error(self.current_offset_of_current_episode)
+@@ -841,18 +921,22 @@ class ContinuousInsertionSimEnv(gym.Env):
+ 
+         return reward
+ 
++    # 获取步数过多标志
+     def get_truncated(self, info, obs=None):
+         return info["steps"] >= self.max_steps
+ 
++    # 获取偏移过大标志
+     def get_terminated(self, info, obs=None):
+         return info["error_too_large"] or info["is_success"]
+-
++    
++    # 获取传感器表面点的位置API
+     def _get_sensor_surface_vertices(self):
+         return [
+             self.tactile_sensor_1.get_surface_vertices_sensor(),
+             self.tactile_sensor_2.get_surface_vertices_sensor(),
+         ]
+ 
++    # 获取钉子底部平面与孔的上部平面的相对距离
+     def _get_peg_relative_z(self):
+         peg_pts = self.peg_abd.get_positions().cpu().numpy().copy()
+         peg_bottom_z = peg_pts[self.peg_bottom_pts_id][:, 2]
+@@ -863,7 +947,8 @@ class ContinuousInsertionSimEnv(gym.Env):
+         self.ipc_system = None
+         pass
+ 
+-
++# 插入环境带标记点光流
++# 继承自插入环境,在此基础上添加了标记点光流相关的东西-应该是把surface_pts替换为marker_flow了
+ class ContinuousInsertionSimGymRandomizedPointFLowEnv(ContinuousInsertionSimEnv):
+     def __init__(
+         self,
+@@ -971,14 +1056,17 @@ class ContinuousInsertionSimGymRandomizedPointFLowEnv(ContinuousInsertionSimEnv)
+             ],
+             axis=0,
+         ).astype(np.float32)
++        print(obs["marker_flow"][1].shape)
+         return obs
+ 
+ 
++# 测试环境
+ if __name__ == "__main__":
+-    gui = True
++    gui = False
+     timestep = 0.05
+ 
+     params = ContinuousInsertionParams(
++        # 仿真参数
+         sim_time_step=0.1,
+         sim_d_hat=0.1e-3,
+         sim_kappa=1e2,
+@@ -998,23 +1086,25 @@ if __name__ == "__main__":
+         allow_self_collision=False,
+         line_search_max_iters=10,
+         ccd_max_iters=100,
++        # 传感器文件
+         tac_sensor_meta_file="gelsight_mini_e430/meta_file",
+-        tac_elastic_modulus_l=3.0e5,  # note if 3e5 is correctly recognized as float
+-        tac_poisson_ratio_l=0.3,
+-        tac_density_l=1e3,
+-        tac_elastic_modulus_r=3.0e5,
+-        tac_poisson_ratio_r=0.3,
+-        tac_density_r=1e3,
+-        tac_friction=100,
++        tac_elastic_modulus_l=3.0e5,  # note if 3e5 is correctly recognized as float 弹性模量-左
++        tac_poisson_ratio_l=0.3, # 泊松比-左
++        tac_density_l=1e3, # 密度-左
++        tac_elastic_modulus_r=3.0e5, # 弹性模量-右
++        tac_poisson_ratio_r=0.3, # 泊松比-右
++        tac_density_r=1e3, # 密度-右
++        tac_friction=100, # 摩擦参数
+         # task specific parameters
+-        gripper_x_offset=0,
+-        gripper_z_offset=-4,
+-        indentation_depth=1,
++        # 任务特定参数
++        gripper_x_offset=0, # 夹爪偏移量
++        gripper_z_offset=-4, # 夹爪偏移量
++        indentation_depth=1, # 压痕深度
+         peg_friction=10,
+         hole_friction=1,
+     )
+     print(params)
+-
++    # 创建 连续插入仿真随机光流 环境
+     env = ContinuousInsertionSimGymRandomizedPointFLowEnv(
+         params=params,
+         step_penalty=1,
+@@ -1031,8 +1121,10 @@ if __name__ == "__main__":
+         peg_hole_path_file="configs/peg_insertion/3shape_1.5mm.txt",
+     )
+ 
++    # 控制结果输出精度，小数点后4位
+     np.set_printoptions(precision=4)
+ 
++    # 光流图像显示函数
+     def visualize_marker_point_flow(o, i, name, save_dir="marker_flow_images3"):
+ 
+         if not os.path.exists(save_dir):
+@@ -1059,22 +1151,34 @@ if __name__ == "__main__":
+             save_dir, f"sp-from-sapienipc-{name}-marker_flow_{i}.png"
+         )
+         plt.savefig(filename)
++        plt.show()
+         plt.close()
++        
+ 
++    # 偏移列表
+     offset_list = [[4, 0, 0], [-4, 0, 0], [0, 4, 0], [0, -4, 0]]
+     for offset in offset_list:
+         # offset = [4,0,0]
++        # 重置环境
+         o, _ = env.reset(offset)
+         for k, v in o.items():
+-            print(k, v.shape)
++            print(k, v.shape,"my_flag")
+ 
++        # 走n步
+         for i in range(10):
++            # 执行动作，获取反馈
+             action = [-0.2, 0, 0]
+             o, r, d, _, info = env.step(action)
++            print(o['gt_offset'].shape)
++            print(o['relative_motion'].shape)
++            print(o["marker_flow"].shape)
+             print(
+                 f"step: {info['steps']} reward: {r:.2f} gt_offset: {o['gt_offset']} success: {info['is_success']}  relative_motion: {o['relative_motion']}"
+                 f" peg_z: {info['peg_relative_z']}, obs check: {info['observation_check']}")
++            # 可视化光流（为什么加上光流显示之后，报错badwindow，所以退出是可视化的问题）
+             # visualize_marker_point_flow(o, i, str(offset), save_dir="saved_images")
++        
++        # 只是起到了一个开始开关的作用
+         if env.viewer is not None:
+             while True:
+                 if env.viewer.window.key_down("c"):
+diff --git a/Track_1/envs/tactile_sensor_sapienipc.py b/Track_1/envs/tactile_sensor_sapienipc.py
+index 7aa6c75..5284018 100644
+--- a/Track_1/envs/tactile_sensor_sapienipc.py
++++ b/Track_1/envs/tactile_sensor_sapienipc.py
+@@ -388,6 +388,7 @@ class VisionTactileSensorSapienIPC(TactileSensorSapienIPC):
+         marker_flow = marker_flow[:, marker_mask]
+ 
+         # post processing
++        # 后处理
+         no_lose_tracking_mask = np.random.rand(marker_flow.shape[1]) > self.marker_lose_tracking_probability
+         marker_flow = marker_flow[:, no_lose_tracking_mask, :]
+         noise = np.random.randn(*marker_flow.shape) * self.marker_random_noise
+diff --git a/Track_1/scripts/universal_training_script.py b/Track_1/scripts/universal_training_script.py
+index 86b1838..22c152c 100644
+--- a/Track_1/scripts/universal_training_script.py
++++ b/Track_1/scripts/universal_training_script.py
+@@ -52,12 +52,14 @@ def make_env(env_name, seed=0, i=0, **env_args):
+ 
+ 
+ if __name__ == "__main__":
++    # 从命令行与配置文件中获取训练参数
+     parser = get_parser()
+     args = parser.parse_args()
+     with open(args.cfg, "r") as f:
+         cfg = yaml.YAML(typ='safe', pure=True).load(f)
+ 
+     # solve argument conflict
++    # 解决参数的覆盖冲突问题
+     cfg = solve_argument_conflict(args, cfg)
+     exp_start_time = get_time()
+     exp_name = f"{cfg['train']['name']}_{exp_start_time}"
+@@ -94,6 +96,7 @@ if __name__ == "__main__":
+         cfg["train"]["seed"] = seed
+     parallel_num = cfg["train"]["parallel"]
+ 
++    # 创建环境
+     env = SubprocVecEnv(
+         [
+             make_env(
+@@ -107,6 +110,7 @@ if __name__ == "__main__":
+     )
+     eval_env = gym.make(env_name, **specified_env_args)
+ 
++    # 训练设备
+     device = "cpu"
+     if torch.cuda.is_available():
+         if torch.cuda.device_count() > cfg["train"]["gpu"]:
+@@ -119,6 +123,7 @@ if __name__ == "__main__":
+     policy_name = cfg["policy"].pop("policy_name")
+     cfg = handle_policy_args(cfg, log_dir, action_dim=env.action_space.shape[0])
+ 
++    # 加载模型
+     algorithm_class = algorithm_aliases[cfg["train"]["algorithm_name"]]
+     model = algorithm_class(
+         policy_name,
+@@ -127,6 +132,7 @@ if __name__ == "__main__":
+         **cfg["policy"],
+     )
+ 
++    # 权重文件
+     weight_dir = os.path.join(log_dir, "weights")
+     Path(weight_dir).makedirs_p()
+ 
+@@ -148,7 +154,9 @@ if __name__ == "__main__":
+         n_eval_episodes=cfg["train"]["n_eval"],
+     )
+ 
+-    WANDB = False
++    # 数据可视化开关
++    # WANDB = False
++    WANDB = True
+     if WANDB:
+         wandb_run = wandb.init(
+             project=cfg["train"]["wandb_name"],
+@@ -166,6 +174,7 @@ if __name__ == "__main__":
+     else:
+         callback = CallbackList([checkpoint_callback, eval_callback])
+ 
++    # 训练(TD3流程),并不停调用回调函数列表中的回调函数
+     model.learn(
+         total_timesteps=cfg["train"]["total_timesteps"], callback=callback, log_interval=cfg["train"]["log_interval"]
+     )
+diff --git a/Track_1/solutions/actor_and_critics.py b/Track_1/solutions/actor_and_critics.py
+index b7c6de8..8000bb7 100644
+--- a/Track_1/solutions/actor_and_critics.py
++++ b/Track_1/solutions/actor_and_critics.py
+@@ -97,7 +97,6 @@ class PointNetActor(Actor):
+ 
+         return pred
+ 
+-
+ class LongOpenLockPointNetActor(Actor):
+     def __init__(
+         self,
+@@ -177,8 +176,6 @@ class LongOpenLockPointNetActor(Actor):
+         pred = self.mlp_policy(feature)
+         return pred
+ 
+-
+-
+ class CustomCritic(BaseModel):
+     """
+     Critic network(s) for DDPG/SAC/TD3.
+@@ -221,8 +218,104 @@ class CustomCritic(BaseModel):
+         """
+         Only predict the Q-value using the first network.
+         This allows to reduce computation when all the estimates are not needed
++        仅使用第一个网络预测 Q 值。
++        当不需要所有估计时，这可以减少计算量
+         (e.g. when updating the policy in TD3).
+         """
+         with torch.no_grad():
+             features = self.extract_features(obs, self.features_extractor)
+         return self.q_networks[0](torch.cat([features, actions], dim=1))
++
++
++"""
++    从SAC的policy模块引入Actor, 应该与TD3的Actor不同, 而Critic是通用的
++"""
++
++from stable_baselines3.sac.policies import Actor as SACActor
++
++class SACPointNetActor(SACActor):
++    def __init__(
++        self,
++        observation_space: gym.spaces.Space,
++        action_space: gym.spaces.Box,
++        features_extractor: nn.Module,
++        pointnet_in_dim: int,
++        pointnet_out_dim: int,
++        normalize_images: bool = True,
++        batchnorm=False,
++        layernorm=True,
++        use_relative_motion=True,
++        zero_init_output=False,
++        **kwargs,
++    ):
++        super().__init__(
++            observation_space,
++            action_space,
++            features_extractor=features_extractor,
++            normalize_images=normalize_images,
++            **kwargs,
++        )
++        self.use_relative_motion = use_relative_motion
++        action_dim = get_action_dim(self.action_space)
++
++        self.point_net_feature_extractor = PointNetFeatureExtractor(
++            dim=pointnet_in_dim, out_dim=pointnet_out_dim, batchnorm=batchnorm
++        )
++
++        mlp_in_channels = 2 * pointnet_out_dim
++        if self.use_relative_motion:
++            mlp_in_channels += 4
++
++        self.mlp_policy = nn.Sequential(
++            nn.Linear(mlp_in_channels, 256),
++            nn.LayerNorm(256) if layernorm else nn.Identity(),
++            nn.ReLU(),
++            nn.Linear(256, 256),
++            nn.LayerNorm(256) if layernorm else nn.Identity(),
++            nn.ReLU(),
++            nn.Linear(256, action_dim),
++            nn.Tanh(),
++        )
++
++        if zero_init_output:
++            last_linear = None
++            for m in self.mlp_policy.children():
++                if isinstance(m, nn.Linear):
++                    last_linear = m
++            if last_linear is not None:
++                nn.init.zeros_(last_linear.bias)
++                last_linear.weight.data.copy_(0.01 * last_linear.weight.data)
++
++
++    def forward(self, obs: torch.Tensor) -> torch.Tensor:
++        with torch.set_grad_enabled(False):
++            marker_pos = self.extract_features(obs, self.features_extractor)
++
++        if marker_pos.ndim == 3:
++            marker_pos = torch.unsqueeze(marker_pos, dim=0)
++
++        batch_num = marker_pos.shape[0]
++
++        l_marker_pos = marker_pos[:, 0, ...]
++        r_marker_pos = marker_pos[:, 1, ...]
++
++        marker_pos_input = torch.cat([l_marker_pos, r_marker_pos], dim=0)
++
++        point_flow_fea = self.point_net_feature_extractor(marker_pos_input)
++
++        l_point_flow_fea = point_flow_fea[:batch_num, ...]
++        r_point_flow_fea = point_flow_fea[batch_num:, ...]
++
++        point_flow_fea = torch.cat([l_point_flow_fea, r_point_flow_fea], dim=-1)
++        feature = [point_flow_fea, ]
++
++        if self.use_relative_motion:
++            relative_motion = obs["relative_motion"]
++            if relative_motion.ndim == 1:
++                relative_motion = torch.unsqueeze(relative_motion, dim=0)
++            feature.append(relative_motion)
++
++        feature = torch.cat(feature, dim=-1)
++        pred = self.mlp_policy(feature)
++
++        return pred
+\ No newline at end of file
+diff --git a/Track_1/solutions/feature_extractors.py b/Track_1/solutions/feature_extractors.py
+index 8815926..6166ab9 100644
+--- a/Track_1/solutions/feature_extractors.py
++++ b/Track_1/solutions/feature_extractors.py
+@@ -3,14 +3,21 @@ import torch
+ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+ 
+ """
+-Feature Extractors for different environments
+-by default, the feature extractors are for actor network
+-unless it starts with "CriticFeatureExtractor"
++    Feature Extractors for different environments
++    by default, the feature extractors are for actor network
++    unless it starts with "CriticFeatureExtractor"
++    适用于不同环境的特征提取器
++    默认情况下，特征提取器适用于"表演者"网络
++    除非它以“CriticFeatureExtractor”开头
+ """
+ 
+ 
+ class CriticFeatureExtractor(BaseFeaturesExtractor):
+-    """general critic feature extractor for peg-in-hole env. the input for critic network is the gt_offset."""
++    """
++        general critic feature extractor for peg-in-hole env. the input for critic network is the gt_offset.
++        用于钉入孔环境的通用评论特征提取器。评论网络的输入是 gt_offset
++        
++    """
+ 
+     def __init__(self, observation_space: gym.spaces):
+         super(CriticFeatureExtractor, self).__init__(observation_space, features_dim=3)
+@@ -21,7 +28,10 @@ class CriticFeatureExtractor(BaseFeaturesExtractor):
+ 
+ 
+ class CriticFeatureExtractorForLongOpenLock(BaseFeaturesExtractor):
+-    """critic feature extractor for lock env. the input for critic network is the information of key1 and key2."""
++    """
++        critic feature extractor for lock env. the input for critic network is the information of key1 and key2.
++        锁环境的批评特征提取器。批评网络的输入是key1和key2的信息
++    """
+     def __init__(self, observation_space: gym.spaces.Dict):
+         super(CriticFeatureExtractorForLongOpenLock, self).__init__(observation_space, features_dim=1)
+         self._features_dim = 6
+@@ -30,12 +40,14 @@ class CriticFeatureExtractorForLongOpenLock(BaseFeaturesExtractor):
+         return torch.cat([observations["key1"], observations["key2"]], dim=-1)
+ 
+ 
+-
+ class FeatureExtractorForPointFlowEnv(BaseFeaturesExtractor):
+     """
+-    feature extractor for point flow env. the input for actor network is the point flow.
+-    so this 'feature extractor' actually only extracts point flow from the original observation dictionary.
+-    the actor network contains a pointnet module to extract latent features from point flow.
++        feature extractor for point flow env. the input for actor network is the point flow.
++        so this 'feature extractor' actually only extracts point flow from the original observation dictionary.
++        the actor network contains a pointnet module to extract latent features from point flow.
++        点流环境的特征提取器。actor network 的输入是点流。
++        因此，这个“特征提取器”实际上只从原始观察字典中提取点流。
++        actor network 包含一个 pointnet 模块，用于从点流中提取潜在特征。
+     """
+ 
+     def __init__(self, observation_space: gym.spaces):
+@@ -47,5 +59,6 @@ class FeatureExtractorForPointFlowEnv(BaseFeaturesExtractor):
+         if original_obs.ndim == 4:
+             original_obs = torch.unsqueeze(original_obs, 0)
+         # (batch_num, 2 (left_and_right), 2 (no-contact and contact), 128 (marker_num), 2 (u, v))
++        # 拼接
+         fea = torch.cat([original_obs[:, :, 0, ...], original_obs[:, :, 1, ...]], dim=-1)
+         return fea
+diff --git a/Track_1/solutions/networks.py b/Track_1/solutions/networks.py
+index ec29fce..d262c42 100644
+--- a/Track_1/solutions/networks.py
++++ b/Track_1/solutions/networks.py
+@@ -6,6 +6,9 @@ from torch import nn
+ 
+ 
+ class PointNetFeaNew(nn.Module):
++    """
++        这个网络是供下面的实现调用的，与点云有关
++    """
+     def __init__(self, point_dim, net_layers: List, batchnorm=False):
+         super(PointNetFeaNew, self).__init__()
+         self.layer_num = len(net_layers)
+@@ -31,11 +34,15 @@ class PointNetFeatureExtractor(nn.Module):
+     this is a latent feature extractor for point cloud data
+     need to distinguish this from other modules defined in feature_extractors.py
+     those modules are only used to extract the corresponding input (e.g. point flow, manual feature, etc.) from original observations
++    这是点云数据的潜在特征提取器
++    需要将其与 feature_extractors.py 中定义的其他模块区分开来
++    这些模块仅用于从原始观测中提取相应的输入（例如点流、手动特征等）
+     """
+     def __init__(self, dim, out_dim, batchnorm=False):
+         super(PointNetFeatureExtractor, self).__init__()
+         self.dim = dim
+ 
++        # ??这个特征数目是？
+         self.pointnet_local_feature_num = 64
+         self.pointnet_global_feature_num = 512
+ 
+diff --git a/Track_1/solutions/policies.py b/Track_1/solutions/policies.py
+index 1f1815a..526c8f0 100644
+--- a/Track_1/solutions/policies.py
++++ b/Track_1/solutions/policies.py
+@@ -90,3 +90,76 @@ class TD3PolicyForLongOpenLockPointFlowEnv(TD3Policy):
+             self.critic_kwargs, CriticFeatureExtractorForLongOpenLock(self.observation_space)
+         )
+         return CustomCritic(**critic_kwargs).to(self.device)
++
++
++"""
++    更改使用其他的Policy, 注意SAC与TD3的Actor是不通用的
++"""
++from stable_baselines3.sac.policies import SACPolicy
++from stable_baselines3.sac.policies import Actor as SACActor
++from Track_1.solutions.actor_and_critics import SACPointNetActor
++
++class SACPolicyForPointFlowEnv(SACPolicy):
++    def __init__(
++            self, 
++            *args,
++            pointnet_in_dim,
++            pointnet_out_dim,
++            pointnet_batchnorm,
++            pointnet_layernorm,
++            zero_init_output,
++            use_relative_motion: bool,
++            **kwargs
++    ):
++        """
++        *args:
++            observation_space, 
++            action_space, 
++            lr_schedule, 
++            net_arch = None, 
++            activation_fn = nn.ReLU, 
++            use_sde = False, 
++            log_std_init = -3, 
++            use_expln = False, 
++            clip_mean = 2, 
++            features_extractor_class = ..., 
++            features_extractor_kwargs = None, 
++            normalize_images = True, 
++            optimizer_class = th.optim.Adam, 
++            optimizer_kwargs = None, 
++            n_critics = 2, 
++            share_features_extractor = False
++        **kwargs:
++            ?
++        """
++        self.pointnet_in_dim = pointnet_in_dim
++        self.pointnet_out_dim = pointnet_out_dim
++        self.pointnet_layernorm = pointnet_layernorm
++        self.pointnet_batchnorm = pointnet_batchnorm
++        self.zero_init_output = zero_init_output
++        self.use_relative_motion = use_relative_motion
++        super(SACPolicyForPointFlowEnv,self).__init__(*args, **kwargs)
++
++    # 重写make_actor
++    def make_actor(self, features_extractor: Optional[BaseFeaturesExtractor] = None) -> SACActor:
++        actor_kwargs = self._update_features_extractor(
++            self.actor_kwargs, FeatureExtractorForPointFlowEnv(self.observation_space)
++        )
++
++        return SACPointNetActor(
++            pointnet_in_dim=self.pointnet_in_dim,
++            pointnet_out_dim=self.pointnet_out_dim,
++            batchnorm=self.pointnet_batchnorm,
++            layernorm=self.pointnet_layernorm,
++            zero_init_output=self.zero_init_output,
++            use_relative_motion=self.use_relative_motion,
++            **actor_kwargs,
++        ).to(self.device)
++    
++    # 重写make_critic
++    def make_critic(self, features_extractor: Optional[BaseFeaturesExtractor] = None) -> CustomCritic:
++        critic_kwargs = self._update_features_extractor(
++            self.critic_kwargs, CriticFeatureExtractor(self.observation_space)
++        )
++
++        return CustomCritic(**critic_kwargs).to(self.device)
+\ No newline at end of file
+diff --git a/Track_2/envs/peg_insertion_v2.py b/Track_2/envs/peg_insertion_v2.py
+index 368be78..659f14b 100644
+--- a/Track_2/envs/peg_insertion_v2.py
++++ b/Track_2/envs/peg_insertion_v2.py
+@@ -1104,7 +1104,8 @@ class Depth_sensor(sapien_sensor.StereoDepthSensor):
+ 
+ 
+ if __name__ == "__main__":
+-    gui = False
++    # gui = False
++    gui = True
+     timestep = 0.05
+ 
+     logger_ = log
+diff --git a/Track_2/scripts/universal_training_script.py b/Track_2/scripts/universal_training_script.py
+index d8eaf4d..6df73d3 100644
+--- a/Track_2/scripts/universal_training_script.py
++++ b/Track_2/scripts/universal_training_script.py
+@@ -48,12 +48,15 @@ def make_env(env_name, seed=0, i=0, **env_args):
+ 
+ if __name__ == "__main__":
+ 
++    # 准备训练参数
+     parser = get_parser()
++    # 从命令行获取的参数
+     args = parser.parse_args()
+     with open(args.cfg, "r") as f:
+         cfg = yaml.YAML(typ='safe', pure=True).load(f)
+ 
+     # solve argument conflict
++    # 解决参数覆盖冲突
+     cfg = solve_argument_conflict(args, cfg)
+     exp_start_time = get_time()
+     exp_name = f"{cfg['train']['name']}_{exp_start_time}"
+@@ -92,6 +95,7 @@ if __name__ == "__main__":
+         cfg["train"]["seed"] = seed
+     parallel_num = cfg["train"]["parallel"]
+ 
++    # 创建环境
+     env = SubprocVecEnv( 
+         [
+             make_env(
+@@ -105,6 +109,7 @@ if __name__ == "__main__":
+     )
+     eval_env = gym.make(env_name, **specified_env_args)
+ 
++    # 训练设备
+     device = "cpu"
+     if torch.cuda.is_available():
+         if torch.cuda.device_count() > cfg["train"]["gpu"]:
+@@ -115,8 +120,10 @@ if __name__ == "__main__":
+     cfg["train"]["device"] = device
+     set_random_seed(seed)
+     policy_name = cfg["policy"].pop("policy_name")
++    # 处理策略参数，这里env.action_space看出action的输出从环境配置中来
+     cfg = handle_policy_args(cfg, log_dir, action_dim=env.action_space.shape[0])
+ 
++    # 加载算法，创建模型
+     algorithm_class = algorithm_aliases[cfg["train"]["algorithm_name"]]
+     model = algorithm_class(
+         policy_name,
+@@ -125,6 +132,7 @@ if __name__ == "__main__":
+         **cfg["policy"],
+     )
+ 
++    # 权重文件
+     weight_dir = os.path.join(log_dir, "weights")
+     Path(weight_dir).makedirs_p()
+ 
+@@ -164,6 +172,7 @@ if __name__ == "__main__":
+     else:
+         callback = CallbackList([checkpoint_callback, eval_callback])
+ 
++    # 训练模型
+     model.learn(
+         total_timesteps=cfg["train"]["total_timesteps"], callback=callback, log_interval=cfg["train"]["log_interval"]
+     )
+diff --git a/Track_2/solutions/feature_extractors.py b/Track_2/solutions/feature_extractors.py
+index b68e788..40206f8 100644
+--- a/Track_2/solutions/feature_extractors.py
++++ b/Track_2/solutions/feature_extractors.py
+@@ -29,7 +29,11 @@ unless it starts with "CriticFeatureExtractor"
+ 
+ 
+ class CriticFeatureExtractor(BaseFeaturesExtractor):
+-    """general critic feature extractor for peg-in-hole env. the input for critic network is the gt_offset."""
++    """
++    general critic feature extractor for peg-in-hole env. the input for critic network is the gt_offset.
++    用于钉入孔环境的通用评论特征提取器。评论网络的输入是 gt_offset。
++    没有用到
++    """
+ 
+     def __init__(self, observation_space: gym.spaces):
+         super(CriticFeatureExtractor, self).__init__(observation_space, features_dim=3)
+@@ -43,6 +47,9 @@ class FeatureExtractorForPointFlowEnv(BaseFeaturesExtractor):
+     feature extractor for point flow env. the input for actor network is the point flow.
+     so this 'feature extractor' actually only extracts point flow from the original observation dictionary.
+     the actor network contains a pointnet module to extract latent features from point flow.
++    点流环境的特征提取器。actor network 的输入是点流。
++    因此，这个“特征提取器”实际上只从原始观察字典中提取点流。
++    actor network 包含一个 pointnet 模块，用于从点流中提取潜在特征。
+     """
+ 
+     def __init__(self, observation_space: gym.spaces):
+@@ -60,7 +67,9 @@ class FeatureExtractorForPointFlowEnv(BaseFeaturesExtractor):
+ class FeatureExtractorState(BaseFeaturesExtractor):
+     """
+     General critic feature extractor for PegInsertion env (v2).
++    插入环境 (v2) 的通用评价者特征提取器。
+     The input for critic network is the gt_offset + relative_motion + direction.
++    评论网络的输入是 gt_offset +relative_motion + direction。
+     """
+ 
+     def __init__(self, observation_space: gym.spaces.Dict):
+@@ -73,12 +82,16 @@ class FeatureExtractorState(BaseFeaturesExtractor):
+         return torch.cat([gt_offset, relative_motion, gt_direction], dim=-1)
+ 
+ class FeaturesExtractorPointCloud(BaseFeaturesExtractor):
++    """
++        融合点云特征和标记点特征的特征提取器
++    """
+     def __init__(self, observation_space: gym.Space,
+                  vision_kwargs:dict=None,
+                  tac_kwargs:dict=None):
+         super().__init__(observation_space, features_dim=1)
+ 
+         # PointCloud
++        # 点云特征
+         vision_dim = vision_kwargs.get('dim', 3)
+         vision_out_dim = vision_kwargs.get('out_dim', 64)
+         self.vision_scale = vision_kwargs.get('scale', 1.0)
+@@ -87,6 +100,7 @@ class FeaturesExtractorPointCloud(BaseFeaturesExtractor):
+         self.point_net_vision2 = PointNetFeatureExtractor(dim=vision_dim, out_dim=vision_out_dim, batchnorm=vision_batchnorm)
+         self.vision_feature_dim = vision_out_dim * 2
+         # Tactile
++        # 传感器特征
+         tac_dim = tac_kwargs.get('dim', 4)
+         tac_out_dim = tac_kwargs.get('out_dim', 32)
+         tac_batchnorm = tac_kwargs.get('batchnorm', False)
+@@ -96,6 +110,7 @@ class FeaturesExtractorPointCloud(BaseFeaturesExtractor):
+         self.layernorm_vision = nn.LayerNorm(self.vision_feature_dim)
+         self.layernorm_tac = nn.LayerNorm(self.tac_feature_dim)
+ 
++        # 特征维度相加
+         self._features_dim = self.vision_feature_dim + self.tac_feature_dim
+ 
+     def parse_obs(self, obs:dict):
+diff --git a/Track_2/solutions/networks.py b/Track_2/solutions/networks.py
+index 929c8fd..051edce 100644
+--- a/Track_2/solutions/networks.py
++++ b/Track_2/solutions/networks.py
+@@ -39,6 +39,9 @@ class PointNetFeatureExtractor(nn.Module):
+     this is a latent feature extractor for point cloud data
+     need to distinguish this from other modules defined in feature_extractors.py
+     those modules are only used to extract the corresponding input (e.g. point flow, manual feature, etc.) from original observations
++    这是点云数据的潜在特征提取器
++    需要将其与 feature_extractors.py 中定义的其他模块区分开来
++    这些模块仅用于从原始观测中提取相应的输入（例如点流、手动特征等）
+     """
+     def __init__(self, dim, out_dim, batchnorm=False):
+         super(PointNetFeatureExtractor, self).__init__()
+diff --git a/Track_3/configs/parameters/peg_insertion.yaml b/Track_3/configs/parameters/peg_insertion.yaml
+index 0f8d3a1..8e365ea 100644
+--- a/Track_3/configs/parameters/peg_insertion.yaml
++++ b/Track_3/configs/parameters/peg_insertion.yaml
+@@ -84,7 +84,7 @@ train:
+   checkpoint_every: 2000
+   eval_freq: 2000
+   n_eval: 50
+-  parallel: 2
++  parallel: 1 #2
+   seed: 0
+   device: "cuda"
+   gpu: 0
